@@ -9,8 +9,8 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import { usePuterStore } from "./lib/puter";
-import { useEffect } from "react";
+import {usePuterStore} from "~/lib/puter";
+import {useEffect} from "react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -26,10 +26,62 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const{ init } = usePuterStore();
+  const { init } = usePuterStore();
+
   useEffect(() => {
-    init()
-  } , [init])
+    // Load Puter.js script dynamically to ensure it loads properly
+    const loadPuterScript = () => {
+      // Check if script is already loaded
+      if (window.puter) {
+        init();
+        return;
+      }
+
+      // Check if script tag already exists
+      const existingScript = document.querySelector('script[src="https://js.puter.com/v2/"]');
+      if (existingScript) {
+        // Script exists but not loaded yet, wait for it
+        const checkInterval = setInterval(() => {
+          if (window.puter) {
+            clearInterval(checkInterval);
+            init();
+          }
+        }, 100);
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          if (!window.puter) {
+            console.error('Puter.js script exists but failed to load');
+          }
+        }, 10000);
+        return;
+      }
+
+      // Create and load script
+      const script = document.createElement('script');
+      script.src = 'https://js.puter.com/v2/';
+      script.async = true;
+      script.defer = true;
+      
+      script.onload = () => {
+        console.log('Puter.js script loaded successfully');
+        // Wait a bit for Puter to initialize
+        setTimeout(() => {
+          init();
+        }, 100);
+      };
+      
+      script.onerror = () => {
+        console.error('Failed to load Puter.js script');
+      };
+      
+      document.head.appendChild(script);
+    };
+
+    loadPuterScript();
+  }, [init]);
+
   return (
     <html lang="en">
       <head>
@@ -39,7 +91,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <script src="https://js.puter.com/v2/"></script>
         {children}
         <ScrollRestoration />
         <Scripts />

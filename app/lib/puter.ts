@@ -241,27 +241,44 @@ export const usePuterStore = create<PuterStore>((set, get) => {
     };
 
     const init = (): void => {
+        // First check if we're in browser
+        if (typeof window === "undefined") {
+            console.warn('Puter.js init called in non-browser environment');
+            return;
+        }
+
         const puter = getPuter();
         if (puter) {
+            console.log('Puter.js already available');
             set({ puterReady: true });
             checkAuthStatus();
             return;
         }
 
+        console.log('Waiting for Puter.js to load...');
+        
+        // Check more frequently at first, then less frequently
+        let attempts = 0;
+        const maxAttempts = 100; // 10 seconds total (100 * 100ms)
+        
         const interval = setInterval(() => {
-            if (getPuter()) {
+            attempts++;
+            const puter = getPuter();
+            
+            if (puter) {
+                console.log('Puter.js loaded after', attempts * 100, 'ms');
                 clearInterval(interval);
                 set({ puterReady: true });
                 checkAuthStatus();
+            } else if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                const errorMsg = "Puter.js failed to load within 10 seconds. Check network connection and script URL.";
+                setError(errorMsg);
+                console.error(errorMsg);
+                console.error('window.puter is:', window.puter);
+                console.error('window object:', window);
             }
         }, 100);
-
-        setTimeout(() => {
-            clearInterval(interval);
-            if (!getPuter()) {
-                setError("Puter.js failed to load within 10 seconds");
-            }
-        }, 10000);
     };
 
     const write = async (path: string, data: string | File | Blob) => {
@@ -294,10 +311,22 @@ export const usePuterStore = create<PuterStore>((set, get) => {
     const upload = async (files: File[] | Blob[]) => {
         const puter = getPuter();
         if (!puter) {
-            setError("Puter.js not available");
-            return;
+            const errorMsg = "Puter.js not available";
+            setError(errorMsg);
+            console.error('Puter.js not available. Make sure the script is loaded and initialized.');
+            return undefined;
         }
-        return puter.fs.upload(files);
+        
+        try {
+            const result = await puter.fs.upload(files);
+            console.log('Puter upload result:', result);
+            return result;
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Upload failed';
+            setError(errorMsg);
+            console.error('Puter upload error:', err);
+            return undefined;
+        }
     };
 
     const deleteFile = async (path: string) => {
